@@ -370,7 +370,6 @@ async function boot() {
     $("loading").hidden = true;
     $("intro").hidden = false;
     setMode("overview");
-    if (SOFTWARE) $("gpuNote").hidden = false;
   }, undefined, (err) => {
     $("loadMsg").textContent = "The 3D model didn't load. Refresh the page to try again.";
     console.error(err);
@@ -425,6 +424,7 @@ function setMode(m) {
   $("joy").hidden = !(m === "walk" && touch);
   $("rooms").hidden = m === "tour";
   if (m !== "overview") $("intro").hidden = true;
+  if (SOFTWARE && m !== "overview" && !gpuNoteDismissed) setTimeout(() => { if (!gpuNoteDismissed) $("gpuNote").hidden = false; }, 1200);
   if (m === "overview") {
     stopTourTimer();
     camera.position.copy(OUT_CAM);
@@ -703,7 +703,8 @@ $("mOverview").addEventListener("click", () => transition(() => setMode("overvie
 $("mTour").addEventListener("click", startTour);
 $("mWalk").addEventListener("click", () => { if (mode === "tour") setMode("walk"); else goTo(SPOTS[0]); });
 $("startTour").addEventListener("click", startTour);
-$("gpuNoteClose").addEventListener("click", () => { $("gpuNote").hidden = true; });
+let gpuNoteDismissed = false;
+$("gpuNoteClose").addEventListener("click", () => { $("gpuNote").hidden = true; gpuNoteDismissed = true; });
 $("startWalk").addEventListener("click", () => goTo(SPOTS[0]));
 if (touch) {
   $("keys").textContent = "Tap any spot on the floor to walk there. Drag to look around. Use the joystick to stroll.";
