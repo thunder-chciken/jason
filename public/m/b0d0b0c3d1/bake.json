@@ -6,22 +6,22 @@
     "LM_house": {
       "file": "lm_LM_house.jpg",
       "size": 4096,
-      "mean": 0.19161759316921234
+      "mean": 0.19483648240566254
     },
     "LM_studio": {
       "file": "lm_LM_studio.jpg",
       "size": 4096,
-      "mean": 0.32848498225212097
+      "mean": 0.33250677585601807
     },
     "LM_furn": {
       "file": "lm_LM_furn.jpg",
       "size": 2048,
-      "mean": 0.15819737315177917
+      "mean": 0.15848496556282043
     },
     "LM_site": {
       "file": "lm_LM_site.jpg",
       "size": 2048,
-      "mean": 1.2292317152023315
+      "mean": 1.2291984558105469
     }
   }
 }

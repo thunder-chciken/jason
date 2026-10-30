@@ -72,6 +72,51 @@ def window(axis, s, e, sill, head, c_out, c_in, style="twin", ext_trim="trim"):
     pbox(axis, s - 0.3, e + 0.3, s0, s1, sill - 0.06, sill, "trim", False)
 
 
+def leaf(thin, t0, t1, w0, w1, z0, z1, mat, style, latch, col):
+    """A real door leaf: stiles, rails and recessed panels on both faces, plus lever handles.
+    thin: world axis through the leaf thickness ('x' or 'y'); t0..t1 thickness; w0..w1 width;
+    style 'int' (two recessed panels) or 'ext' (glass upper lite over two panels); latch: width
+    coordinate of the latch edge."""
+    if w1 < w0:
+        w0, w1 = w1, w0
+
+    def part(a, b, za, zb, ta, tb, m, solid=col):
+        if thin == "x":
+            prism(m, ta, tb, a, b, za, zb, solid)
+        else:
+            prism(m, a, b, ta, tb, za, zb, solid)
+
+    st, top, bot = 0.36, 0.36, 0.72
+    lock0, lock1 = z0 + 2.95, z0 + 3.55
+    inset = 0.035
+    # frame at full thickness
+    part(w0, w0 + st, z0, z1, t0, t1, mat)
+    part(w1 - st, w1, z0, z1, t0, t1, mat)
+    part(w0 + st, w1 - st, z1 - top, z1, t0, t1, mat)
+    part(w0 + st, w1 - st, z0, z0 + bot, t0, t1, mat)
+    part(w0 + st, w1 - st, lock0, lock1, t0, t1, mat)
+    # lower panel, recessed on both faces, with a raised field
+    part(w0 + st, w1 - st, z0 + bot, lock0, t0 + inset, t1 - inset, mat)
+    part(w0 + st + 0.12, w1 - st - 0.12, z0 + bot + 0.12, lock0 - 0.12, t0 + inset * 0.4, t1 - inset * 0.4, mat, False)
+    if style == "ext":
+        mid = (t0 + t1) / 2
+        part(w0 + st, w1 - st, lock1, z1 - top, mid - 0.012, mid + 0.012, "glass")
+        for (a, b, za, zb) in ((w0 + st, w1 - st, lock1, lock1 + 0.05), (w0 + st, w1 - st, z1 - top - 0.05, z1 - top),
+                               (w0 + st, w0 + st + 0.05, lock1, z1 - top), (w1 - st - 0.05, w1 - st, lock1, z1 - top)):
+            part(a, b, za, zb, t0 - 0.02, t1 + 0.02, mat, False)                # glazing stops
+    else:
+        part(w0 + st, w1 - st, lock1, z1 - top, t0 + inset, t1 - inset, mat)
+        part(w0 + st + 0.12, w1 - st - 0.12, lock1 + 0.12, z1 - top - 0.12, t0 + inset * 0.4, t1 - inset * 0.4, mat, False)
+    # lever handles on both faces
+    lx = latch - 0.22 if abs(latch - w1) < abs(latch - w0) else latch + 0.22
+    zc = z0 + 3.05
+    for (ta, tb, ra, rb) in ((t0 - 0.05, t0, t0 - 0.03, t0), (t1, t1 + 0.05, t1, t1 + 0.03)):
+        part(lx - 0.07, lx + 0.07, zc - 0.07, zc + 0.07, ra, rb, "black", False)  # rose
+        lever0, lever1 = (lx, lx + 0.38) if lx < latch else (lx - 0.38, lx)
+        lever0, lever1 = (lx - 0.38, lx) if latch > lx else (lx, lx + 0.38)
+        part(min(lever0, lever1), max(lever0, lever1), zc - 0.025, zc + 0.025, ta, tb, "black", False)
+
+
 def door(axis, s, e, head, c0, c1, hinge="s", swing=1, leaf="door_int", open_=True,
          glass=False, casing=(True, True), z0=0.0, pocket=False):
     j = 0.08
@@ -85,7 +130,9 @@ def door(axis, s, e, head, c0, c1, hinge="s", swing=1, leaf="door_int", open_=Tr
         h = s + j if hinge == "s" else e - j
         a0, a1 = (h, h + th) if hinge == "s" else (h - th, h)
         f = c1 if swing > 0 else c0
-        pbox(axis, a0, a1, f, f + swing * w, z0 + 0.03, head - j, leaf, False)
+        thin = "x" if axis == "x" else "y"
+        style = "ext" if leaf == "door_ext" else "int"
+        globals()["leaf"](thin, a0, a1, f, f + swing * w, z0 + 0.03, head - j, leaf, style, f + swing * w, False)
     else:
         cm = (c0 + c1) / 2
         if glass:
@@ -96,7 +143,10 @@ def door(axis, s, e, head, c0, c1, hinge="s", swing=1, leaf="door_int", open_=Tr
             pbox(axis, mid - 0.08, mid + 0.08, cm - th / 2, cm + th / 2, z0, head - j, leaf, True)
             pbox(axis, s + j, e - j, cm - 0.01, cm + 0.01, z0 + 0.6, head - j - 0.25, "glass", True)
         else:
-            pbox(axis, s + j, e - j, cm - th / 2, cm + th / 2, z0 + 0.03, head - j, leaf, True)
+            thin = "y" if axis == "x" else "x"
+            style = "ext" if leaf == "door_ext" else "int"
+            latch = e - j if hinge == "s" else s + j
+            globals()["leaf"](thin, cm - th / 2, cm + th / 2, s + j, e - j, z0 + 0.03, head - j, leaf, style, latch, True)
     for side, c in zip(casing, (c0, c1)):
         if not side:
             continue
@@ -379,7 +429,8 @@ box("colonly", 30.25, 32.95, 22.6, 28.6, 0, 2.3)              # sofa footprint
 box("colonly", 33.6, 35.6, 23.6, 27.6, 0, 1.3)                # coffee table footprint
 box("colonly", 34.6, 37.4, 20.2, 23.0, 0, 3.0)                # lounge chair footprint
 box("walnut", 37.6, 39.15, 21.8, 30.0, 0, 2.0, True)           # media console
-box("screen", 38.7, 38.85, 22.6, 29.2, 4.4, 8.0, False)        # TV
+box("black", 38.95, 39.2, 23.55, 28.25, 4.15, 6.95, False)      # 65-inch TV, wall mounted
+box("screen", 38.93, 38.95, 23.62, 28.18, 4.22, 6.88, False)
 pcyl("colonly", 38.3, 31.8, 0, 2.8, 1.1, 8)                   # potted plant footprint
 
 # ---------------------------------------------------------------- bedrooms
