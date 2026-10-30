@@ -234,6 +234,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { GroundedSkybox } from "three/addons/objects/GroundedSkybox.js";
 import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 
 const F = 0.3048;                                                     // feet -> meters
@@ -327,6 +328,12 @@ async function boot() {
     scene.backgroundRotation.y = rot;
     scene.environment = pmrem.fromEquirectangular(t).texture;
     scene.environmentRotation.y = rot;
+    // Project the photographed farm onto a ground dome so the lawn, trees and fields sit at real scale.
+    const CAPTURE_HEIGHT = 1.7, groundY = -0.5 * F;
+    const sky = new GroundedSkybox(t, CAPTURE_HEIGHT, 260);
+    sky.position.y = CAPTURE_HEIGHT + groundY - 0.02;
+    sky.rotation.y = rot;
+    scene.add(sky);
   });
   const lmIntensity = Math.PI * bake.exposure;
 
@@ -360,7 +367,9 @@ async function boot() {
         if (lightmaps[group]) {
           m.lightMap = lightmaps[group];
           m.lightMapIntensity = lmIntensity;
-          m.envMapIntensity = 0.28;
+          m.envMapIntensity = 0.15;
+          if (/^(grass|gravel)/.test(m.name)) fadeOut(m, 34, 47);
+          if (/^grass/.test(m.name) && m.map) addOuterLawn(m.map);
         }
         if (group === "NOLM_light") { m.emissiveIntensity = 3; }
         if (group === "NOLM_mirror") { m.envMapIntensity = 1.0; }
@@ -375,6 +384,38 @@ async function boot() {
     console.error(err);
   });
 }
+// Fade the modelled lawn and drive into the photographed ground beyond the yard.
+function fadeOut(m, r0, r1) {
+  const c = P(45, 17.5);
+  m.transparent = true;
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vFadeWorld;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvFadeWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vFadeWorld;")
+      .replace("#include <dithering_fragment>",
+        `#include <dithering_fragment>\ngl_FragColor.a *= 1.0 - smoothstep(${r0.toFixed(1)}, ${r1.toFixed(1)}, distance(vFadeWorld.xz, vec2(${c.x.toFixed(3)}, ${c.z.toFixed(3)})));`);
+  };
+}
+// A wide unlit lawn under the baked yard, so the photo's ground only shows near the horizon.
+let outerLawn = false;
+function addOuterLawn(map) {
+  if (outerLawn) return;
+  outerLawn = true;
+  const t = map.clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(420 / 0.61, 420 / 0.61);
+  t.needsUpdate = true;
+  const mat = new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(1.0, 1.0, 0.95) });
+  fadeOut(mat, 70, 175);
+  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(420, 420), mat);
+  lawn.rotation.x = -Math.PI / 2;
+  const c = P(45, 17.5);
+  lawn.position.set(c.x, -0.5 * F - 0.03, c.z);
+  lawn.renderOrder = -1;
+  scene.add(lawn);
+}
 function groupOf(o) {
   for (let p = o; p; p = p.parent) {
     const m = /^(LM_[a-z]+|NOLM_[a-z_]+|COLLIDER)/.exec(p.name || "");
@@ -386,12 +427,13 @@ boot().catch((e) => { $("loadMsg").textContent = "The 3D model didn't load. Refr
 
 // ------------------------------------------------------------ outside view (orbit)
 const orbit = new OrbitControls(camera, canvas);
-const OUT_TARGET = P(46, 16, 7), OUT_CAM = P(4, 98, 36);
+const OUT_TARGET = P(46, 16, 6), OUT_CAM = P(-6, 112, 22);
 orbit.target.copy(OUT_TARGET);
 orbit.enableDamping = true;
 orbit.maxPolarAngle = Math.PI * 0.47;
+orbit.minPolarAngle = 1.0;                                         // keep the view low enough that the scenery reads as real
 orbit.minDistance = 8;
-orbit.maxDistance = 95;
+orbit.maxDistance = 75;
 orbit.autoRotate = !reduceMotion;
 orbit.autoRotateSpeed = 0.4;
 camera.position.copy(OUT_CAM);

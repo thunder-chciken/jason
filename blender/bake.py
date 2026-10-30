@@ -42,7 +42,7 @@ world.use_nodes = True
 nt = world.node_tree
 bg = nt.nodes["Background"]
 env = nt.nodes.new("ShaderNodeTexEnvironment")
-hdr_path = os.path.join(ASSETS, "kloofendal_48d_partly_cloudy_puresky", "sky_2k.hdr")
+hdr_path = os.path.join(ASSETS, "belfast_farmhouse", "sky_2k.hdr")
 env.image = bpy.data.images.load(hdr_path)
 mapping = nt.nodes.new("ShaderNodeMapping")
 coord = nt.nodes.new("ShaderNodeTexCoord")
@@ -77,12 +77,12 @@ def point(name, x, fy, z, watts, color=(1.0, 0.86, 0.72), radius=0.08):
 
 for (x, fy) in ((3, 2.5), (11, 2.5), (3, 13.5), (11, 13.5), (17.5, 2.0), (18.2, 10.0), (3, 25), (10, 25),
                 (3, 32), (10, 32), (18.2, 25), (12.2, 18.6), (17, 18.6), (5, 19.4), (24.5, 5.5), (24.5, 11.5)):
-    point("can", x, fy, 8.7, 22)
+    point("can", x, fy, 8.7, 12)
 for fy in (9.0, 11.2, 13.4):
-    point("pendant", 30.05, fy, 6.75, 18)
-point("living_fill", 34.5, 26.0, 12.0, 60, radius=0.6)
-point("loft_fill_a", 9.0, 12.0, 15.0, 35, radius=0.5)
-point("loft_fill_b", 12.0, 27.0, 17.0, 35, radius=0.5)
+    point("pendant", 30.05, fy, 7.15, 14)
+point("living_fill", 34.5, 26.0, 12.0, 20, radius=0.6)
+point("loft_fill_a", 9.0, 12.0, 15.0, 18, radius=0.5)
+point("loft_fill_b", 12.0, 27.0, 17.0, 18, radius=0.5)
 for (x, fy) in ((57, 10), (65, 10), (57, 22), (65, 22), (70, 30)):
     point("studio", x, fy, zs(fy) - 0.4, 45)
 for (x, fy) in ((80, 12), (80, 26)):

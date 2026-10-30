@@ -26,16 +26,16 @@ def ext_walls(x0, x1, y0, y1, top, ops, skin="rpanel", sides="SNWE"):
     g = lambda k: ops.get(k, [])
     if "S" in sides:
         solid_wall(skin, "x", x0, x1, y0, y0 + S, 0, top, g("S"))
-        solid_wall("drywall", "x", x0 + S, x1 - S, y0 + S, y0 + T, 0, top, g("S"))
+        solid_wall("drywall", "x", x0 + S, x1 - S, y0 + S, y0 + T, 0, top, g("S"), base="c1")
     if "N" in sides:
         solid_wall(skin, "x", x0, x1, y1 - S, y1, 0, top, g("N"))
-        solid_wall("drywall", "x", x0 + S, x1 - S, y1 - T, y1 - S, 0, top, g("N"))
+        solid_wall("drywall", "x", x0 + S, x1 - S, y1 - T, y1 - S, 0, top, g("N"), base="c0")
     if "W" in sides:
         solid_wall(skin, "y", y0 + S, y1 - S, x0, x0 + S, 0, top, g("W"))
-        solid_wall("drywall", "y", y0 + T, y1 - T, x0 + S, x0 + T, 0, top, g("W"))
+        solid_wall("drywall", "y", y0 + T, y1 - T, x0 + S, x0 + T, 0, top, g("W"), base="c1")
     if "E" in sides:
         solid_wall(skin, "y", y0 + S, y1 - S, x1 - S, x1, 0, top, g("E"))
-        solid_wall("drywall", "y", y0 + T, y1 - T, x1 - T, x1 - S, 0, top, g("E"))
+        solid_wall("drywall", "y", y0 + T, y1 - T, x1 - T, x1 - S, 0, top, g("E"), base="c0")
 
 
 def window(axis, s, e, sill, head, c_out, c_in, style="twin", ext_trim="trim"):
@@ -204,10 +204,10 @@ def iw(x0, x1, fy0, fy1, ops=(), top=9.0, axis=None):
     """Interior partition; openings given in plan units along the long axis."""
     ax = axis or ("x" if (x1 - x0) > (fy1 - fy0) else "y")
     if ax == "x":
-        solid_wall("drywall", "x", x0, x1, Y(fy1), Y(fy0), 0, top, ops)
+        solid_wall("drywall", "x", x0, x1, Y(fy1), Y(fy0), 0, top, ops, base="both")
     else:
         conv = [(Y(e), Y(s), sill, head) for (s, e, sill, head) in ops]
-        solid_wall("drywall", "y", Y(fy1), Y(fy0), x0, x1, 0, top, conv)
+        solid_wall("drywall", "y", Y(fy1), Y(fy0), x0, x1, 0, top, conv, base="both")
 
 
 iw(14.8, 15.3, T, 16.3, [(10.1, 13.1, 0, 6.67)])                 # bedroom | bath
@@ -234,6 +234,8 @@ door("y", Y(33.6), Y(30.6), 6.67, 14.7, 15.25, hinge="s", swing=1)           # b
 box("drywall", T, 26.3, T, 17.6, 9.0, 10.3, True)
 box("drywall", T, 21.4, 17.6, 35 - T, 9.0, 10.3, True)
 box("oak", T, 26.3, T, 17.6, 10.3, 10.333, True, skip="b")
+for (x0, x1, f0, f1) in ((T, T + 0.045, T, 35 - T), (T, 26.3, T, T + 0.045), (T, 21.4, 35 - T - 0.045, 35 - T)):
+    box("trim", x0, x1, f0, f1, 10.333, 10.71, False)                       # loft baseboards
 box("oak", T, 21.4, 17.6, 35 - T, 10.3, 10.333, True, skip="b")
 box("trim", 26.3, 26.4, T, 17.6, 9.0, 10.333, False)                # loft edge fascia
 box("trim", 21.3, 26.4, 17.6, 17.7, 9.0, 10.333, False)
@@ -263,22 +265,109 @@ def base_cab(x0, x1, fy0, fy1, top=3.0, mat="cabinet"):
     box("quartz", x0 - 0.06, x1 + 0.06, fy0 - 0.06, fy1 + 0.06, top - 0.12, top, True)
 
 
-base_cab(21.6, 36.4, T, 2.9)                       # rear run under window
-base_cab(21.6, 23.6, 2.9, 13.1)                    # west run
-box("steel", 21.7, 23.7, 6.9, 9.5, 3.0, 3.05, False)   # cooktop
+def fronts(face, a0, a1, c, z0, z1, kind="base", mat="cabinet", n=None):
+    """Shaker doors/drawers with black pulls on a cabinet face, in plan units.
+    face: direction the fronts look ('n','s','e','w'); c: the face plane (fy for n/s, x for e/w);
+    a0..a1: span along the face (x for n/s, fy for e/w)."""
+    if face in "ns":
+        axis, cw, d, A0, A1 = "x", Y(c), (1 if face == "n" else -1), a0, a1
+    else:
+        axis, cw, d = "y", c, (1 if face == "e" else -1)
+        A0, A1 = sorted((Y(a0), Y(a1)))
+
+    def slab(p0, p1, zz0, zz1, t0, t1, m):
+        pbox(axis, p0, p1, *sorted((cw + d * t0, cw + d * t1)), zz0, zz1, m, False)
+
+    cols = n or max(1, round((A1 - A0) / 1.55))
+    w = (A1 - A0) / cols
+    if kind == "base":
+        slab(A0, A1, z0, z0 + 0.33, 0, 0.004, "black")                       # shadowed toe kick
+        rows = [(z0 + 0.36, z1 - 0.72, "door"), (z1 - 0.68, z1 - 0.16, "drawer")]
+    elif kind == "upper":
+        rows = [(z0 + 0.04, z1 - 0.04, "door")]
+    else:
+        rows = [(z0 + 0.36, z0 + 4.2, "door"), (z0 + 4.25, z1 - 0.05, "door")]
+    for i in range(cols):
+        p0, p1 = A0 + i * w + 0.012, A0 + (i + 1) * w - 0.012
+        for (r0, r1, typ) in rows:
+            fw = 0.19 if typ == "door" else 0.13
+            slab(p0, p1, r0, r1, 0, 0.035, mat)                              # recessed centre panel
+            for (q0, q1, s0, s1) in ((p0, p0 + fw, r0, r1), (p1 - fw, p1, r0, r1),
+                                     (p0 + fw, p1 - fw, r1 - fw, r1), (p0 + fw, p1 - fw, r0, r0 + fw)):
+                slab(q0, q1, s0, s1, 0.035, 0.07, mat)                       # rails and stiles
+            if typ == "drawer":
+                m = (p0 + p1) / 2
+                zc = (r0 + r1) / 2
+                slab(m - 0.27, m + 0.27, zc - 0.022, zc + 0.022, 0.07, 0.13, "black")
+            else:
+                x = p0 + 0.12 if i % 2 else p1 - 0.12
+                zz = (r0 + 0.15, r0 + 0.7) if kind == "upper" else (r1 - 0.75, r1 - 0.2)
+                slab(x - 0.022, x + 0.022, zz[0], zz[1], 0.07, 0.13, "black")
+
+
+# rear run with an undermount sink: counter split around the basin opening
+box("cabinet", 21.6, 32.2, T, 2.9, 0, 2.88, True)
+box("cabinet", 34.2, 36.4, T, 2.9, 0, 2.88, True)
+box("cabinet", 32.2, 34.2, T, 2.9, 0, 2.2, True)
+for (x0, x1, f0, f1) in ((21.54, 32.2, T - 0.06, 2.96), (34.2, 36.46, T - 0.06, 2.96),
+                         (32.2, 34.2, T - 0.06, 1.15), (32.2, 34.2, 2.4, 2.96)):
+    box("quartz", x0, x1, f0, f1, 2.88, 3.0, True)
+box("sinkdark", 32.2, 34.2, 1.15, 2.4, 2.2, 2.32, True)                    # basin floor
+for (x0, x1, f0, f1) in ((32.2, 32.24, 1.15, 2.4), (34.16, 34.2, 1.15, 2.4),
+                         (32.2, 34.2, 1.15, 1.19), (32.2, 34.2, 2.36, 2.4)):
+    box("steel", x0, x1, f0, f1, 2.32, 2.99, False)                         # basin walls
+pcyl("black", 33.2, 1.0, 3.0, 4.15, 0.05, 8, False)                         # gooseneck faucet
+box("black", 33.15, 33.25, 1.0, 1.65, 4.05, 4.15, False)
+box("black", 33.15, 33.25, 1.6, 1.68, 3.75, 4.15, False)
+fronts("s", 23.6, 36.4, 2.9, 0, 2.88, "base")
+
+base_cab(21.6, 23.6, 2.9, 13.1)                                             # west run
+fronts("e", 2.9, 6.9, 23.6, 0, 2.88, "base")
+fronts("e", 9.5, 13.1, 23.6, 0, 2.88, "base")
+# freestanding range between the west-run cabinets
+box("steel", 21.7, 23.7, 6.9, 9.5, 3.0, 3.05, False)                        # cooktop
 for i in range(5):
     pcyl("black", 22.65, 7.25 + i * 0.5, 3.05, 3.08, 0.18, 12, False)
-box("steel", 21.58, 23.0, 7.3, 9.1, 6.0, 7.5, True)    # hood
-box("steel", 21.6, 24.0, 13.1, 16.25, 0, 7.0, True)    # refrigerator
-box("black", 24.0, 24.02, 13.3, 16.0, 1.0, 6.8, False)
-box("cabinet", 36.4, 39.25, T, 3.6, 0, 7.5, True)      # pantry tower
-box("cabinet", 21.58, 30.4, T, 1.95, 4.5, 7.5, True)   # uppers
+box("steel", 23.6, 23.68, 6.92, 9.48, 0.3, 2.98, False)                     # range front
+box("screen", 23.68, 23.7, 7.25, 9.15, 1.05, 2.0, False)                    # oven window
+box("steel", 23.7, 23.82, 7.2, 9.2, 2.3, 2.36, False)                       # oven handle
+for i in range(5):
+    box("black", 23.68, 23.76, 7.35 + i * 0.45, 7.5 + i * 0.45, 2.62, 2.77, False)   # knobs
+box("black", 23.6, 23.62, 6.92, 9.48, 0, 0.3, False)
+# chimney hood
+box("steel", 21.58, 23.45, 7.0, 9.4, 5.75, 6.2, True)
+box("steel", 21.58, 22.45, 7.7, 8.7, 6.2, 9.0, True)
+# stainless French-door refrigerator
+box("steel", 21.6, 23.85, 13.1, 16.25, 0, 7.0, True)
+box("black", 23.85, 23.87, 13.12, 16.23, 0.3, 6.98, False)
+for (f0, f1) in ((13.14, 14.66), (14.69, 16.21)):
+    box("steel", 23.87, 23.98, f0, f1, 2.5, 6.95, False)
+box("steel", 23.87, 23.98, 13.14, 16.21, 0.32, 2.46, False)                # freezer drawer
+for fy in (14.45, 14.9):
+    box("alum", 23.98, 24.12, fy - 0.03, fy + 0.03, 3.4, 6.2, False)        # door handles
+box("alum", 23.98, 24.12, 13.6, 15.75, 2.12, 2.18, False)                   # drawer handle
+# pantry tower and uppers with crown trim
+box("cabinet", 36.4, 39.25, T, 3.6, 0, 7.5, True)
+fronts("s", 36.4, 39.25, 3.6, 0, 7.5, "tall", n=2)
+box("cabinet", 21.58, 30.4, T, 1.95, 4.5, 7.5, True)
 box("cabinet", 21.58, 22.9, 1.95, 6.6, 4.5, 7.5, True)
 box("cabinet", 21.58, 22.9, 9.8, 13.1, 4.5, 7.5, True)
-box("steel", 32.2, 34.2, 1.1, 2.4, 2.95, 3.0, False)   # sink
-pcyl("black", 33.2, 1.0, 3.0, 4.1, 0.05, 8, False)     # faucet
-box("black", 33.15, 33.25, 1.0, 1.6, 4.0, 4.1, False)
-base_cab(28.0, 32.1, 7.7, 14.7, 3.0)                   # island
+fronts("s", 22.9, 30.4, 1.95, 4.5, 7.5, "upper")
+fronts("e", 1.95, 6.6, 22.9, 4.5, 7.5, "upper")
+fronts("e", 9.8, 13.1, 22.9, 4.5, 7.5, "upper")
+box("cabinet", 21.58, 30.5, T, 2.07, 7.5, 7.75, False)
+box("cabinet", 21.58, 23.02, 2.07, 6.6, 7.5, 7.75, False)
+box("cabinet", 21.58, 23.02, 9.8, 13.1, 7.5, 7.75, False)
+# subway tile backsplash
+box("subway", 21.58, 30.6, T, T + 0.04, 3.0, 4.5, False)
+box("subway", 30.6, 35.6, T, T + 0.04, 3.0, 3.4, False)
+box("subway", 35.6, 36.4, T, T + 0.04, 3.0, 4.5, False)
+box("subway", 21.58, 21.62, T + 0.04, 13.1, 3.0, 4.5, False)
+box("subway", 21.58, 21.62, 6.6, 9.8, 4.5, 5.75, False)
+# island: cabinets on the kitchen side, counter overhang for seating on the living side
+box("cabinet", 28.0, 31.1, 7.7, 14.7, 0, 2.88, True)
+box("quartz", 27.94, 32.2, 7.64, 14.76, 2.88, 3.0, True)
+fronts("w", 7.7, 14.7, 28.0, 0, 2.88, "base")
 for fy in (9.3, 11.1, 12.9):                           # bar stool footprints (models placed in furnish.py)
     pcyl("colonly", 32.9, fy, 0, 2.5, 0.8, 8)
 for fy in (9.0, 11.2, 13.4):                           # pendant downrods; shades come from furnish.py
@@ -337,8 +426,12 @@ def toilet(x, fy, facing):
         box("porcelain", tx - 0.35, tx + 0.35, ty - 0.85, ty + 0.85, 1.3, 2.6, True)
 
 
-def vanity(x0, x1, fy0, fy1, sinks, mirror_side):
+def vanity(x0, x1, fy0, fy1, sinks, mirror_side, face=None):
     box("walnut", x0, x1, fy0, fy1, 0, 2.85, True)
+    if face == "n":
+        fronts("n", x0, x1, fy0, 0, 2.85, "base", "walnut")
+    elif face in ("e", "w"):
+        fronts(face, fy0, fy1, x1 if face == "e" else x0, 0, 2.85, "base", "walnut", n=2)
     box("quartz", x0, x1, fy0, fy1, 2.85, 3.0, True)
     for (sx, sf) in sinks:
         pcyl("porcelain", sx, sf, 3.0, 3.35, 0.65, 20)
@@ -354,8 +447,8 @@ def vanity(x0, x1, fy0, fy1, sinks, mirror_side):
 
 toilet(16.85, 6.2, "s")
 box("porcelain", 18.6, 21.08, 5.0, 9.6, 0, 1.9, True)          # tub
-vanity(15.3, 21.08, 14.5, 16.3, [(16.9, 15.3), (19.5, 15.3)], "s")
-vanity(19.2, 21.08, 21.0, 24.0, [(20.1, 22.5)], "e")
+vanity(15.3, 21.08, 14.5, 16.3, [(16.9, 15.3), (19.5, 15.3)], "s", face="n")
+vanity(19.2, 21.08, 21.0, 24.0, [(20.1, 22.5)], "e", face="w")
 toilet(19.8, 25.5, "w")
 box("mosaic", 15.3, 20.0, 26.8, 29.9, 0.04, 0.12, True)         # shower base
 box("glass", 15.3, 20.0, 26.75, 26.8, 0.12, 7.0, True)          # shower glass
@@ -434,7 +527,7 @@ garage_door(76.8, 86.8, 10, 35, 35 - T)
 door("x", 70.6, 73.6, 7, 35 - T, 35, leaf="door_ext", open_=False)
 door("y", 26.7, 29.3, 7, 51.625, 51.625 + T, hinge="s", swing=1, leaf="door_ext")   # breezeway -> studio
 door("y", 28.9, 32.05, 7, 89.625 - T, 89.625, leaf="door_ext", open_=False)
-solid_wall("drywall", "y", T, 35 - T, 74.2, 74.6, 0, zs, [(26.7, 29.3, 0, 7)])     # studio | garage
+solid_wall("drywall", "y", T, 35 - T, 74.2, 74.6, 0, zs, [(26.7, 29.3, 0, 7)], base="both")     # studio | garage
 door("y", 26.7, 29.3, 7, 74.2, 74.6, hinge="e", swing=1)
 prism("drywall", 51.625 + T, 89.625 - T, T, 35 - T, lambda x, y: zs(x, y) - 0.12, zs, False)
 prism("trim", 50.625, 90.625, -1, 36, zs, lambda x, y: zs(x, y) + 0.42, True)
@@ -451,11 +544,12 @@ iw(56.95, 57.3, 27.2, 35 - T, [(30.7, 33.8, 0, 6.67)], top=8.5)
 box("drywall", 52.375, 57.3, 26.8, 35 - T, 8.5, 8.67, True)
 door("y", Y(33.8), Y(30.7), 6.67, 56.95, 57.3, pocket=True)
 toilet(53.6, 32.6, "e")
-vanity(52.4, 54.4, 27.4, 29.6, [(53.4, 28.5)], None)
+vanity(52.4, 54.4, 27.4, 29.6, [(53.4, 28.5)], None, face="e")
 box("mirror", 52.4, 52.44, 27.6, 29.4, 4.0, 6.8, False)
 
 # studio fit-out: counter, sink, work table, wheels, shelving
 base_cab(52.4, 54.5, 8.6, 26.6, 3.0, "walnut")
+fronts("e", 8.6, 22.95, 54.5, 0, 2.88, "base", "walnut")
 box("steel", 52.6, 54.3, 23.0, 25.5, 2.9, 3.02, True)           # industrial sink
 box("steel", 52.6, 54.3, 23.0, 25.5, 0, 2.9, True)
 box("steel", 52.7, 53.9, 10.4, 11.6, 3.0, 4.0, False)           # coffee maker

@@ -56,13 +56,15 @@ MATS = {
     "plant":         ((0.22, 0.42, 0.2), 4, 0.8, 0, 1, 0),
     "carpaint":      ((0.18, 0.26, 0.34), 4, 0.25, 0.6, 1, 0),
     "colonly":       ((1.0, 0.0, 1.0), 4, 1.0, 0, 0.0, 0),
+    "subway":        ("pbr:subway_diff.jpg", 2.0, 0.12, 0, 1, 0),
+    "sinkdark":      ((0.42, 0.43, 0.44), 4, 0.3, 0.9, 1, 0),
 }
 # normal map file and strength; roughness map file (same UV tiling as the albedo)
 NORMALS = {"rpanel": ("rpanel_nor.jpg", 1.0), "rpanel_grey": ("rpanel_nor.jpg", 1.0),
            "drywall": ("plaster_nor.jpg", 0.12), "concrete_ext": ("concrete_ext_nor.jpg", 0.8),
            "concrete": ("concrete_nor.jpg", 0.5), "oak": ("oak_nor.jpg", 0.6), "mosaic": ("mosaic_nor.jpg", 0.8),
            "cedar_tg": ("cedar_tg_nor.jpg", 0.7), "grass": ("grass_nor.jpg", 1.0), "gravel": ("gravel_nor.jpg", 1.0),
-           "walnut": ("walnut_nor.jpg", 0.5)}
+           "walnut": ("walnut_nor.jpg", 0.5), "subway": ("subway_nor.jpg", 0.8)}
 ROUGHS = {"rpanel": "rpanel_rough.jpg", "rpanel_grey": "rpanel_rough.jpg", "concrete_ext": "concrete_ext_rough.jpg",
           "concrete": "concrete_rough.jpg", "oak": "oak_rough.jpg", "mosaic": "mosaic_rough.jpg",
           "cedar_tg": "cedar_tg_rough.jpg", "grass": "grass_rough.jpg", "gravel": "gravel_rough.jpg",
@@ -161,7 +163,7 @@ def pcyl(mat, cx, fy, z0, z1, r, seg=20, col=True):
     cyl(mat, cx, Y(fy), z0, z1, r, seg, col)
 
 
-def solid_wall(mat, axis, a0, a1, c0, c1, z0, top, openings=(), col=True):
+def solid_wall(mat, axis, a0, a1, c0, c1, z0, top, openings=(), col=True, base=None):
     """Wall along `axis` ('x' or 'y') from a0..a1, thickness c0..c1 on the other
     axis, from z0 to `top` (number or f(x,y)). openings: (s, e, sill, head)
     along the axis; overlapping openings at different heights are allowed."""
@@ -188,6 +190,13 @@ def solid_wall(mat, axis, a0, a1, c0, c1, z0, top, openings=(), col=True):
                 prism(mat, p, q, c0, c1, lo, zt, col)
             else:
                 prism(mat, c0, c1, p, q, lo, zt, col)
+            if base and lo <= z0 + 1e-3:          # baseboard on the room side(s) of floor-level pieces
+                for side in (("c0",) if base == "c0" else ("c1",) if base == "c1" else ("c0", "c1")):
+                    b0, b1 = (c0 - 0.045, c0) if side == "c0" else (c1, c1 + 0.045)
+                    if axis == "x":
+                        prism("trim", p, q, b0, b1, z0, z0 + 0.38, False)
+                    else:
+                        prism("trim", b0, b1, p, q, z0, z0 + 0.38, False)
 
 
 def _mesh(name, verts, faces, uvs=None, mis=None):

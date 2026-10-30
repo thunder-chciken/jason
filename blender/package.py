@@ -14,9 +14,10 @@ for b in g["buffers"]:
 with open(os.path.join(M, "mehnert.json"), "w", encoding="utf-8") as f:
     json.dump(g, f, separators=(",", ":"))
 
-sky = os.path.join(os.path.dirname(HERE), "ph_assets", "kloofendal_48d_partly_cloudy_puresky", "sky_tonemapped.jpg")
+sky = os.path.join(os.path.dirname(HERE), "ph_assets", "belfast_farmhouse", "sky_tonemapped.jpg")
+Image.MAX_IMAGE_PIXELS = None
 im = Image.open(sky).convert("RGB")
-im.resize((2048, 1024), Image.LANCZOS).save(os.path.join(M, "sky.jpg"), quality=86)
+im.resize((4096, 2048), Image.LANCZOS).save(os.path.join(M, "sky.jpg"), quality=84)
 
 used = {i["uri"] for i in g.get("images", []) if "uri" in i}
 files = sorted(used | {"mehnert.json", "sky.jpg", "bake.json"} | {f for f in os.listdir(M) if f.startswith("lm_")})

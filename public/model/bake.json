@@ -1,27 +1,27 @@
 {
   "exposure": 6.0,
-  "sky_rotation_deg": 255.10059309418878,
-  "sun_elevation_deg": 47.900390625,
+  "sky_rotation_deg": 253.16699934418878,
+  "sun_elevation_deg": 21.533203125,
   "groups": {
     "LM_house": {
       "file": "lm_LM_house.jpg",
       "size": 4096,
-      "mean": 0.2289193868637085
+      "mean": 0.19161759316921234
     },
     "LM_studio": {
       "file": "lm_LM_studio.jpg",
       "size": 4096,
-      "mean": 0.2568925619125366
+      "mean": 0.32848498225212097
     },
     "LM_furn": {
       "file": "lm_LM_furn.jpg",
       "size": 2048,
-      "mean": 0.14126190543174744
+      "mean": 0.15819737315177917
     },
     "LM_site": {
       "file": "lm_LM_site.jpg",
       "size": 2048,
-      "mean": 1.408096432685852
+      "mean": 1.2292317152023315
     }
   }
 }
