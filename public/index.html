@@ -133,6 +133,13 @@
   .lbar { height: 4px; background: var(--steel-2); border-radius: 2px; margin-top: 16px; overflow: hidden; }
   .lbar i { display: block; height: 100%; width: 0; background: var(--red); transition: width .2s; }
   .loading p { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .gpu-note {
+    left: 50%; transform: translateX(-50%); top: calc(124px + env(safe-area-inset-top, 0px)); width: min(560px, calc(100vw - 24px));
+    display: flex; gap: 12px; align-items: flex-start; background: #3a2a10; border: 1px solid #a8761f; color: #ffe6b3;
+    border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.45;
+  }
+  .gpu-note b { color: #fff; font-weight: 600; }
+  .gpu-note button { flex: none; border: 0; background: none; color: #ffe6b3; font-size: 15px; padding: 0 2px; }
 
   @media (max-width: 760px), (pointer: coarse) {
     .map canvas { width: 160px; height: 83px; }
@@ -205,6 +212,11 @@
 
   <div class="hud joy" id="joy" hidden><i id="knob"></i></div>
 
+  <div class="hud gpu-note" id="gpuNote" role="status" hidden>
+    <span>Graphics acceleration is turned off in this browser, so movement may be choppy. For the smoothest walkthrough, turn on <b>Use graphics acceleration when available</b> in your browser settings and restart it.</span>
+    <button id="gpuNoteClose" aria-label="Dismiss">&#10005;</button>
+  </div>
+
   <div class="hud loading" id="loading">
     <div class="box"><img src="logo.png" alt=""><div class="lbar"><i id="prog"></i></div><p id="loadMsg">Loading the house…</p></div>
   </div>
@@ -268,8 +280,19 @@ const SPOTS = [
 
 // ------------------------------------------------------------ renderer & scene
 const canvas = $("view");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, touch ? 1.5 : 2));
+// Browsers with graphics acceleration turned off draw WebGL on the CPU; detect that up front.
+const GPU_NAME = (() => {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2") || document.createElement("canvas").getContext("webgl");
+    const ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "";
+  } catch (_) { return ""; }
+})();
+const SOFTWARE = /SwiftShader|Basic Render|llvmpipe|Software/i.test(GPU_NAME);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !SOFTWARE, powerPreference: "high-performance" });
+const MAX_RATIO = Math.min(window.devicePixelRatio, touch ? 1.5 : 2);
+let ratio = SOFTWARE ? 0.55 : MAX_RATIO;
+renderer.setPixelRatio(ratio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -326,7 +349,7 @@ async function boot() {
       }
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
-        if (m.map) m.map.anisotropy = maxAniso;
+        if (m.map) m.map.anisotropy = SOFTWARE ? 1 : Math.min(maxAniso, 8);
         if (m.transmission > 0 || /glass/i.test(m.name) || group === "NOLM_glass") {
           m.transmission = 0;
           m.transparent = true;
@@ -347,6 +370,7 @@ async function boot() {
     $("loading").hidden = true;
     $("intro").hidden = false;
     setMode("overview");
+    if (SOFTWARE) $("gpuNote").hidden = false;
   }, undefined, (err) => {
     $("loadMsg").textContent = "The 3D model didn't load. Refresh the page to try again.";
     console.error(err);
@@ -679,6 +703,7 @@ $("mOverview").addEventListener("click", () => transition(() => setMode("overvie
 $("mTour").addEventListener("click", startTour);
 $("mWalk").addEventListener("click", () => { if (mode === "tour") setMode("walk"); else goTo(SPOTS[0]); });
 $("startTour").addEventListener("click", startTour);
+$("gpuNoteClose").addEventListener("click", () => { $("gpuNote").hidden = true; });
 $("startWalk").addEventListener("click", () => goTo(SPOTS[0]));
 if (touch) {
   $("keys").textContent = "Tap any spot on the floor to walk there. Drag to look around. Use the joystick to stroll.";
@@ -778,8 +803,23 @@ resize();
 
 const clock = new THREE.Clock();
 let mapTick = 0;
+// Resolution governor: drop the render resolution when frames run slow, raise it back when there's headroom.
+let govTime = 0, govFrames = 0, govGood = 0;
+function govern(raw) {
+  govTime += raw; govFrames++;
+  if (govTime < 1) return;
+  const ms = (govTime / govFrames) * 1000;
+  govTime = 0; govFrames = 0;
+  let next = ratio;
+  if (ms > 24) { next = Math.max(0.45, ratio * 0.78); govGood = 0; }
+  else if (ms < 18 && ratio < MAX_RATIO && ++govGood >= 3) { next = Math.min(MAX_RATIO, ratio * 1.15); govGood = 0; }
+  if (Math.abs(next - ratio) > 0.02) { ratio = next; renderer.setPixelRatio(ratio); resize(); }
+}
+
 renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const raw = clock.getDelta();
+  govern(raw);
+  const dt = Math.min(raw, 0.1);
   if (mode === "overview") orbit.update();
   else {
     if (mode === "tour" && tourPlaying && !drag && !reduceMotion) {
