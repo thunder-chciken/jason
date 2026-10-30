@@ -1,0 +1,27 @@
+{
+  "exposure": 6.0,
+  "sky_rotation_deg": 255.10059309418878,
+  "sun_elevation_deg": 47.900390625,
+  "groups": {
+    "LM_house": {
+      "file": "lm_LM_house.jpg",
+      "size": 4096,
+      "mean": 0.2289193868637085
+    },
+    "LM_studio": {
+      "file": "lm_LM_studio.jpg",
+      "size": 4096,
+      "mean": 0.2568925619125366
+    },
+    "LM_furn": {
+      "file": "lm_LM_furn.jpg",
+      "size": 2048,
+      "mean": 0.14126190543174744
+    },
+    "LM_site": {
+      "file": "lm_LM_site.jpg",
+      "size": 2048,
+      "mean": 1.408096432685852
+    }
+  }
+}

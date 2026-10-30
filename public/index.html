@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="3D walkthrough of the Mehnert Home barndominium, prepared by Story Remodeling &amp; Restoration.">
+</head>
+<body>
+<title>Mehnert Home Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  /* Full-bleed 3D canvas; HUD floats at the edges in the Story Remodeling steel-and-red palette (single dark look). */
+  :root {
+    --steel: #1c2429;
+    --steel-2: #263137;
+    --panel: rgba(22, 29, 33, 0.84);
+    --line: rgba(255, 255, 255, 0.13);
+    --fg: #f1f3f3;
+    --muted: #aab5ba;
+    --red: #d0141a;
+    --red-soft: #ff7a7e;
+    --display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+    --body: "Barlow", "Segoe UI", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--steel); color: var(--fg); font-family: var(--body); overflow: hidden; }
+  #app { position: fixed; inset: 0; }
+  canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; cursor: grab; }
+  canvas#view.dragging { cursor: grabbing; }
+  canvas#view.floor { cursor: pointer; }
+  #fade { position: absolute; inset: 0; background: #0e1316; opacity: 0; pointer-events: none; transition: opacity .32s ease; z-index: 4; }
+  #fade.on { opacity: 1; }
+
+  .hud { position: absolute; z-index: 5; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  .brand {
+    top: calc(12px + env(safe-area-inset-top, 0px)); left: calc(12px + env(safe-area-inset-left, 0px));
+    display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 6px 14px 6px 6px; backdrop-filter: blur(6px); max-width: calc(100vw - 210px);
+  }
+  .brand img { width: 50px; height: auto; display: block; flex: none; }
+  .brand h1 { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1; letter-spacing: .02em; margin: 0; }
+  .brand p { margin: 2px 0 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand p b { color: var(--fg); font-weight: 600; }
+
+  .modes {
+    top: calc(12px + env(safe-area-inset-top, 0px)); right: calc(12px + env(safe-area-inset-right, 0px));
+    display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 5px;
+  }
+  .modes button {
+    border: 0; background: transparent; padding: 7px 11px; border-radius: 7px; font-family: var(--display);
+    font-weight: 600; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+  }
+  .modes button[aria-pressed="true"] { background: var(--red); color: #fff; }
+
+  .rooms {
+    left: calc(12px + env(safe-area-inset-left, 0px)); right: calc(12px + env(safe-area-inset-right, 0px));
+    top: calc(78px + env(safe-area-inset-top, 0px));
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; pointer-events: none;
+  }
+  .rooms::-webkit-scrollbar { display: none; }
+  .chip {
+    pointer-events: auto; flex: none; border: 1px solid var(--line); background: var(--panel); border-radius: 999px;
+    padding: 6px 12px; font-size: 13px; font-weight: 500; white-space: nowrap;
+  }
+  .chip:hover { border-color: var(--red-soft); }
+  .chip.on { background: var(--fg); color: var(--steel); border-color: var(--fg); }
+
+  .where {
+    left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 16px; text-align: center;
+    pointer-events: none; max-width: calc(100vw - 360px);
+  }
+  .where .room { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .03em; text-transform: uppercase; line-height: 1.1; }
+  .where .hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .tour {
+    left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: min(560px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; backdrop-filter: blur(8px);
+  }
+  .tour .step { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--red-soft); font-family: var(--display); font-weight: 600; }
+  .tour h2 { font-family: var(--display); font-size: 26px; line-height: 1; margin: 2px 0 4px; }
+  .tour p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+  .tour .ctl { display: flex; gap: 6px; }
+  .tour .ctl button { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--steel-2); font-size: 16px; display: grid; place-items: center; }
+  .tour .ctl button.next { background: var(--red); border-color: var(--red); }
+  .tour .bar { grid-column: 1 / -1; height: 3px; background: var(--steel-2); border-radius: 2px; overflow: hidden; }
+  .tour .bar i { display: block; height: 100%; width: 0; background: var(--red); }
+  .tour .exit { grid-column: 1 / -1; justify-self: start; border: 0; background: none; color: var(--muted); font-size: 12.5px; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+
+  .map {
+    right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px;
+  }
+  .map canvas { display: block; width: 280px; height: 145px; cursor: crosshair; }
+  .map .cap { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: .04em; text-transform: uppercase; gap: 10px; }
+
+  .card {
+    left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(430px, calc(100vw - 32px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; backdrop-filter: blur(8px);
+  }
+  .card .eyebrow { font-family: var(--display); font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--red-soft); font-size: 13px; }
+  .card h2 { font-family: var(--display); font-size: 34px; line-height: 1; margin: 6px 0 10px; text-wrap: balance; }
+  .card p { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 12px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 16px; }
+  .stats div { border-top: 2px solid var(--red); padding-top: 6px; }
+  .stats b { display: block; font-family: var(--display); font-size: 24px; font-variant-numeric: tabular-nums; }
+  .stats span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .ctas { display: grid; gap: 8px; }
+  .cta {
+    width: 100%; border: 0; background: var(--red); color: #fff; border-radius: 9px; padding: 12px 16px;
+    font-family: var(--display); font-weight: 700; font-size: 19px; letter-spacing: .06em; text-transform: uppercase;
+  }
+  .cta.alt { background: transparent; border: 1px solid var(--line); color: var(--fg); font-size: 16px; padding: 10px 16px; }
+  .cta:hover { filter: brightness(1.08); }
+  .keys { font-size: 12.5px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+  .contact { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .contact b { color: var(--fg); user-select: all; }
+
+  .joy { left: calc(26px + env(safe-area-inset-left, 0px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); width: 116px; height: 116px; border-radius: 50%;
+    background: rgba(22, 29, 33, 0.5); border: 1px solid var(--line); touch-action: none; }
+  .joy i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(241, 243, 243, 0.85); }
+
+  .loading { inset: 0; display: grid; place-items: center; background: var(--steel); z-index: 20; }
+  .loading .box { width: min(320px, 80vw); text-align: center; }
+  .loading img { width: 110px; }
+  .lbar { height: 4px; background: var(--steel-2); border-radius: 2px; margin-top: 16px; overflow: hidden; }
+  .lbar i { display: block; height: 100%; width: 0; background: var(--red); transition: width .2s; }
+  .loading p { color: var(--muted); font-size: 13px; margin-top: 10px; }
+
+  @media (max-width: 760px), (pointer: coarse) {
+    .map canvas { width: 160px; height: 83px; }
+    .map .cap span:last-child { display: none; }
+    .where { bottom: auto; top: calc(118px + env(safe-area-inset-top, 0px)); padding: 5px 12px; max-width: calc(100vw - 24px); }
+    .where .room { font-size: 17px; }
+    .where .hint { display: none; }
+    .brand h1 { font-size: 19px; }
+    .brand img { width: 40px; }
+    .modes button { padding: 6px 8px; font-size: 13px; }
+    .tour h2 { font-size: 21px; }
+    .tour p { font-size: 12.5px; }
+    body.touring .map { display: none; }
+  }
+  @media (max-width: 480px) { .brand p { display: none; } .brand { max-width: calc(100vw - 196px); } }
+  @media (prefers-reduced-motion: reduce) { #fade, .lbar i { transition: none; } }
+</style>
+
+<div id="app">
+  <canvas id="view" tabindex="0" aria-label="3D view of the Mehnert Home"></canvas>
+  <div id="fade"></div>
+
+  <div class="hud brand">
+    <img src="logo.png" alt="Story Remodeling &amp; Restoration">
+    <div><h1>Mehnert Home</h1><p>3D walkthrough · <b>Story Remodeling</b> · (918) 955-6234</p></div>
+  </div>
+
+  <div class="hud modes" role="group" aria-label="View mode">
+    <button id="mOverview" aria-pressed="true">Outside</button>
+    <button id="mTour" aria-pressed="false">Tour</button>
+    <button id="mWalk" aria-pressed="false">Walk</button>
+  </div>
+
+  <div class="hud rooms" id="rooms" aria-label="Jump to a room"></div>
+
+  <div class="hud where" id="where" hidden><div class="room" id="roomName">Front Porch</div><div class="hint" id="hint">Click the floor to walk there · drag to look around · W A S D also works</div></div>
+
+  <div class="hud tour" id="tour" hidden aria-live="polite">
+    <div><div class="step" id="tStep">Stop 1 of 11</div><h2 id="tName">Front Porch</h2><p id="tText"></p></div>
+    <div class="ctl">
+      <button id="tPrev" aria-label="Previous stop">&#9664;</button>
+      <button id="tPlay" aria-label="Pause tour">&#10074;&#10074;</button>
+      <button id="tNext" class="next" aria-label="Next stop">&#9654;</button>
+    </div>
+    <div class="bar"><i id="tBar"></i></div>
+    <button class="exit" id="tExit">Leave the tour and walk around on my own</button>
+  </div>
+
+  <div class="hud map" id="map">
+    <canvas id="mini" width="560" height="290" aria-label="Floor plan. Click a spot to go there."></canvas>
+    <div class="cap"><span id="mapLevel">Main floor</span><span>Click the plan to jump</span></div>
+  </div>
+
+  <div class="hud card" id="intro" hidden>
+    <div class="eyebrow">Steel-frame barndominium</div>
+    <h2>Walk through the Mehnert Home</h2>
+    <p>House, loft, pottery studio, breezeway and garage, built from the 10.08.26 construction drawings.</p>
+    <div class="stats">
+      <div><b>4,202</b><span>Sq ft under roof</span></div>
+      <div><b>2,349</b><span>Sq ft living</span></div>
+      <div><b>2 + 2.5</b><span>Bed + bath</span></div>
+    </div>
+    <div class="ctas">
+      <button class="cta" id="startTour">Take the guided tour</button>
+      <button class="cta alt" id="startWalk">Explore on my own</button>
+    </div>
+    <div class="keys" id="keys">Click any spot on the floor to walk there. Drag to look around. Arrow keys or W A S D work too.</div>
+    <div class="contact"><span>Prepared by Story Remodeling &amp; Restoration</span><span><b>(918) 955-6234</b></span></div>
+  </div>
+
+  <div class="hud joy" id="joy" hidden><i id="knob"></i></div>
+
+  <div class="hud loading" id="loading">
+    <div class="box"><img src="logo.png" alt=""><div class="lbar"><i id="prog"></i></div><p id="loadMsg">Loading the house…</p></div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.6/build/index.module.js"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
+
+const F = 0.3048;                                                     // feet -> meters
+const P = (x, fy, z = 0) => new THREE.Vector3(x * F, z * F, -(35 - fy) * F);   // plan feet -> world
+const EYE = 1.62, RADIUS = 0.26, STEP = 0.38;
+const touch = matchMedia("(pointer: coarse)").matches;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------ rooms (plan feet: x0, x1, fy0, fy1)
+const ROOMS = [
+  { n: "Master Bedroom", r: [0.75, 14.8, 0.75, 16.3] },
+  { n: "Mechanical", r: [15.3, 21.08, 0.75, 4.4] },
+  { n: "Master Bath", r: [15.3, 21.08, 4.75, 16.3] },
+  { n: "Master Closet", r: [0.75, 9.95, 16.7, 22.2] },
+  { n: "Hallway", r: [10.3, 25.1, 16.7, 20.6] },
+  { n: "Bedroom 2", r: [0.75, 14.7, 21.0, 34.25] },
+  { n: "Hall Bath", r: [15.25, 21.08, 21.0, 29.9] },
+  { n: "Closet", r: [15.25, 21.08, 30.25, 34.25] },
+  { n: "Stairs", r: [21.4, 26.9, 17.6, 34.25] },
+  { n: "Kitchen", r: [21.58, 39.25, 0.75, 16.5] },
+  { n: "Living Room", r: [25.0, 39.25, 16.5, 34.25] },
+  { n: "Breezeway", r: [40.0, 51.6, 2.7, 18.0] },
+  { n: "Half Bath", r: [52.4, 57.3, 27.2, 34.25] },
+  { n: "Pottery Studio", r: [51.6, 74.4, 0.75, 34.25] },
+  { n: "Garage", r: [74.4, 89.6, 0.75, 34.25] },
+  { n: "Front Porch", r: [0, 40.5, 35, 43.5] },
+];
+const LOFT = { n: "Loft", r: [0.75, 26.3, 0.75, 34.25] };
+
+const SPOTS = [
+  { n: "Front Porch", p: [29.3, 42.6], yaw: 0.12, t: "A 40-foot covered porch on 8×8 cedar posts runs the full front of the house." },
+  { n: "Living Room", p: [37.6, 33.2], yaw: 0.62, t: "The ceiling vaults up to 21 feet, with the loft and stair open above." },
+  { n: "Kitchen", p: [37.3, 16.0], yaw: 1.0, t: "An L-shaped kitchen with a pantry wall and an island that seats three." },
+  { n: "Master Bedroom", p: [13.2, 14.6], yaw: 1.2, t: "The rear bedroom has a walk-in closet and its own bath." },
+  { n: "Master Bath", p: [18.0, 12.9], yaw: 0, pitch: -0.15, t: "Double vanity and a soaking tub." },
+  { n: "Bedroom 2", p: [12.4, 27.8], yaw: 1.5, t: "The front bedroom has its own closet and sits next to the hall bath." },
+  { n: "Hall Bath", p: [17.2, 22.2], yaw: Math.PI, pitch: -0.15, t: "Walk-in shower and a single vanity." },
+  { n: "Loft", p: [19.0, 12.0], z: 10.333, yaw: 0.95, pitch: -0.15, t: "933 square feet of loft that looks over the living room and kitchen." },
+  { n: "Breezeway", p: [42.6, 12.2], yaw: -1.57, t: "An enclosed breezeway with laundry links the house to the studio." },
+  { n: "Pottery Studio", p: [62.0, 30.5], yaw: 0.25, t: "807 square feet with a 16-foot overhead door, a utility sink and a half bath." },
+  { n: "Garage", p: [81.5, 27.0], yaw: 0, t: "539 square feet with a 10-foot overhead door." },
+];
+
+// ------------------------------------------------------------ renderer & scene
+const canvas = $("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, touch ? 1.5 : 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xbcd0e0);
+const camera = new THREE.PerspectiveCamera(touch ? 72 : 64, 1, 0.05, 900);
+const pmrem = new THREE.PMREMGenerator(renderer);
+
+// ------------------------------------------------------------ load everything
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+let collider = null;
+const manager = new THREE.LoadingManager();
+manager.onProgress = (_url, done, total) => { $("prog").style.width = Math.round((done / total) * 100) + "%"; };
+const texLoader = new THREE.TextureLoader(manager);
+
+async function boot() {
+  const bake = await (await fetch("model/bake.json")).json();
+  const rot = THREE.MathUtils.degToRad(bake.sky_rotation_deg) + Math.PI;
+  const lightmaps = {};
+  for (const [g, info] of Object.entries(bake.groups)) {
+    const t = texLoader.load("model/" + info.file);
+    t.flipY = false;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.channel = 1;
+    lightmaps[g] = t;
+  }
+  texLoader.load("model/sky.jpg", (t) => {
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    scene.background = t;
+    scene.backgroundRotation.y = rot;
+    scene.environment = pmrem.fromEquirectangular(t).texture;
+    scene.environmentRotation.y = rot;
+  });
+  const lmIntensity = Math.PI * bake.exposure;
+
+  const loader = new GLTFLoader(manager);
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.load("model/mehnert.json", (gltf) => {
+    const root = gltf.scene;
+    root.updateMatrixWorld(true);
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      const group = groupOf(o);
+      if (group === "COLLIDER") {
+        const g = o.geometry.clone();
+        g.applyMatrix4(o.matrixWorld);
+        g.boundsTree = new MeshBVH(g);
+        collider = new THREE.Mesh(g, new THREE.MeshBasicMaterial());
+        o.visible = false;
+        return;
+      }
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (m.map) m.map.anisotropy = maxAniso;
+        if (m.transmission > 0 || /glass/i.test(m.name) || group === "NOLM_glass") {
+          m.transmission = 0;
+          m.transparent = true;
+          m.opacity = Math.min(m.opacity, 0.22);
+          m.depthWrite = false;
+          m.envMapIntensity = 1.2;
+        }
+        if (lightmaps[group]) {
+          m.lightMap = lightmaps[group];
+          m.lightMapIntensity = lmIntensity;
+          m.envMapIntensity = 0.28;
+        }
+        if (group === "NOLM_light") { m.emissiveIntensity = 3; }
+        if (group === "NOLM_mirror") { m.envMapIntensity = 1.0; }
+      }
+    });
+    scene.add(root);
+    $("loading").hidden = true;
+    $("intro").hidden = false;
+    setMode("overview");
+  }, undefined, (err) => {
+    $("loadMsg").textContent = "The 3D model didn't load. Refresh the page to try again.";
+    console.error(err);
+  });
+}
+function groupOf(o) {
+  for (let p = o; p; p = p.parent) {
+    const m = /^(LM_[a-z]+|NOLM_[a-z_]+|COLLIDER)/.exec(p.name || "");
+    if (m) return m[1];
+  }
+  return "";
+}
+boot().catch((e) => { $("loadMsg").textContent = "The 3D model didn't load. Refresh the page to try again."; console.error(e); });
+
+// ------------------------------------------------------------ outside view (orbit)
+const orbit = new OrbitControls(camera, canvas);
+const OUT_TARGET = P(46, 16, 7), OUT_CAM = P(4, 98, 36);
+orbit.target.copy(OUT_TARGET);
+orbit.enableDamping = true;
+orbit.maxPolarAngle = Math.PI * 0.47;
+orbit.minDistance = 8;
+orbit.maxDistance = 95;
+orbit.autoRotate = !reduceMotion;
+orbit.autoRotateSpeed = 0.4;
+camera.position.copy(OUT_CAM);
+
+// ------------------------------------------------------------ walk state
+let mode = "overview";
+const pos = new THREE.Vector3();
+let yaw = 0, pitch = 0, vy = 0, camY = 0;
+let autoTarget = null, autoStall = 0;
+const keys = new Set();
+const joyVec = { x: 0, y: 0 };
+const ray = new THREE.Raycaster();
+ray.firstHitOnly = true;
+
+const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.28, 48), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }));
+ring.rotation.x = -Math.PI / 2;
+ring.renderOrder = 10;
+ring.visible = false;
+scene.add(ring);
+
+function setMode(m) {
+  mode = m;
+  document.body.classList.toggle("touring", m === "tour");
+  $("mOverview").setAttribute("aria-pressed", m === "overview");
+  $("mTour").setAttribute("aria-pressed", m === "tour");
+  $("mWalk").setAttribute("aria-pressed", m === "walk");
+  orbit.enabled = m === "overview";
+  $("where").hidden = m !== "walk";
+  $("tour").hidden = m !== "tour";
+  $("joy").hidden = !(m === "walk" && touch);
+  $("rooms").hidden = m === "tour";
+  if (m !== "overview") $("intro").hidden = true;
+  if (m === "overview") {
+    stopTourTimer();
+    camera.position.copy(OUT_CAM);
+    orbit.target.copy(OUT_TARGET);
+    orbit.update();
+  }
+  if (m === "walk") stopTourTimer();
+  ring.visible = false;
+  autoTarget = null;
+  canvas.focus();
+  renderChips();
+}
+
+function groundAt(p, from) {
+  ray.set(new THREE.Vector3(p.x, from, p.z), new THREE.Vector3(0, -1, 0));
+  ray.far = 40;
+  const hit = collider && ray.intersectObject(collider)[0];
+  return hit ? hit.point.y : null;
+}
+
+// Fade to dark, move the camera, fade back in.
+let fading = false, queued = null;
+function transition(fn) {
+  if (reduceMotion) { fn(); return; }
+  if (fading) { queued = fn; return; }                              // keep only the latest request
+  fading = true;
+  $("fade").classList.add("on");
+  setTimeout(() => {
+    fn();
+    setTimeout(() => {
+      $("fade").classList.remove("on");
+      fading = false;
+      if (queued) { const q = queued; queued = null; transition(q); }
+    }, 40);
+  }, 330);
+}
+
+function place(spot) {
+  const z = (spot.z || 0) * F;
+  const p = P(spot.p[0], spot.p[1]);
+  const g = groundAt(p, z + 1.2);
+  pos.set(p.x, g ?? z, p.z);
+  camY = pos.y;
+  yaw = spot.yaw || 0;
+  pitch = spot.pitch ?? -0.06;
+  vy = 0;
+  autoTarget = null;
+}
+function goTo(spot, animate = true) {
+  const run = () => { place(spot); if (mode !== "walk") setMode("walk"); renderChips(spot.n); };
+  animate ? transition(run) : run();
+}
+
+// ------------------------------------------------------------ collision
+// Which of three probe lanes (left, center, right) hit something within dist + RADIUS.
+function probe(from, dir, dist) {
+  const hits = [false, false, false];
+  if (!collider) return hits;
+  const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+  for (const h of [0.42, 1.0, 1.55]) {
+    [-0.75, 0, 0.75].forEach((off, i) => {
+      if (hits[i]) return;
+      const o = from.clone().add(new THREE.Vector3(0, h, 0)).addScaledVector(perp, off * RADIUS);
+      ray.set(o, dir);
+      ray.far = dist + RADIUS;
+      if (ray.intersectObject(collider).length) hits[i] = true;
+    });
+  }
+  return hits;
+}
+const blocked = (from, dir, dist) => probe(from, dir, dist).some(Boolean);
+
+function tryMove(d) {
+  const len = d.length();
+  if (len < 1e-6) return 0;
+  const dir = d.clone().divideScalar(len);
+  const hits = probe(pos, dir, len);
+  if (!hits.some(Boolean)) { pos.add(d); return len; }
+  // Center lane clear but one shoulder clips a door jamb: ease sideways toward the open side.
+  if (!hits[1] && hits[0] !== hits[2]) {
+    const perp = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(hits[0] ? len * 0.8 : -len * 0.8);
+    const pd = perp.length();
+    if (!blocked(pos, perp.clone().divideScalar(pd), pd)) { pos.add(perp); return pd; }
+    return 0;
+  }
+  let moved = 0;
+  for (const axis of [new THREE.Vector3(d.x, 0, 0), new THREE.Vector3(0, 0, d.z)]) {
+    const l = axis.length();
+    if (l > 1e-6 && !blocked(pos, axis.clone().divideScalar(l), l)) { pos.add(axis); moved += l; }
+  }
+  return moved;
+}
+
+function updateWalk(dt) {
+  let ix = joyVec.x, iy = joyVec.y;
+  if (keys.has("KeyW") || keys.has("ArrowUp")) iy += 1;
+  if (keys.has("KeyS") || keys.has("ArrowDown")) iy -= 1;
+  if (keys.has("KeyA")) ix -= 1;
+  if (keys.has("KeyD")) ix += 1;
+  if (keys.has("ArrowLeft") || keys.has("KeyQ")) yaw += 1.7 * dt;
+  if (keys.has("ArrowRight") || keys.has("KeyE")) yaw -= 1.7 * dt;
+  const mag = Math.hypot(ix, iy);
+  if (mag > 1) { ix /= mag; iy /= mag; }
+  let d;
+  if (mag > 0.01) {
+    autoTarget = null;
+    const speed = (keys.has("ShiftLeft") || keys.has("ShiftRight")) ? 3.0 : 1.55;
+    const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    d = fwd.multiplyScalar(iy).addScaledVector(right, ix).multiplyScalar(speed * dt);
+  } else if (autoTarget) {
+    const to = new THREE.Vector3(autoTarget.x - pos.x, 0, autoTarget.z - pos.z);
+    const dist = to.length();
+    if (dist < 0.12) { autoTarget = null; ring.visible = false; }
+    else d = to.multiplyScalar(Math.min(1.8 * dt, dist * 4 * dt + 0.004) / dist);
+  }
+  if (d) {
+    const n = Math.max(1, Math.ceil(d.length() / 0.08));
+    d.divideScalar(n);
+    let moved = 0;
+    for (let i = 0; i < n; i++) moved += tryMove(d);
+    if (autoTarget) {
+      autoStall = moved < d.length() * n * 0.2 ? autoStall + dt : 0;
+      if (autoStall > 0.35) { autoTarget = null; ring.visible = false; autoStall = 0; }
+    }
+  }
+  const g = groundAt(pos, pos.y + STEP);
+  if (g !== null && g >= pos.y - 0.001) { pos.y = g; vy = 0; }
+  else {
+    vy -= 9.8 * dt;
+    pos.y += vy * dt;
+    if (g !== null && pos.y < g) { pos.y = g; vy = 0; }
+  }
+  camY += (pos.y - camY) * Math.min(1, dt * 14);
+  camera.position.set(pos.x, camY + EYE, pos.z);
+  camera.rotation.set(pitch, yaw, 0, "YXZ");
+  updateRoomLabel();
+}
+
+// ------------------------------------------------------------ input
+addEventListener("keydown", (e) => {
+  if (mode === "overview") return;
+  if (mode === "tour" && /^(Key[WASD]|Arrow(Up|Down))$/.test(e.code)) { setMode("walk"); }
+  if (mode === "tour" && e.code === "ArrowRight") { tourStep(1); return; }
+  if (mode === "tour" && e.code === "ArrowLeft") { tourStep(-1); return; }
+  keys.add(e.code);
+  if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
+});
+addEventListener("keyup", (e) => keys.delete(e.code));
+addEventListener("blur", () => keys.clear());
+
+const pointer = new THREE.Vector2();
+function floorHit(clientX, clientY) {
+  if (!collider) return null;
+  const r = canvas.getBoundingClientRect();
+  pointer.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(pointer, camera);
+  ray.far = 30;
+  const hit = ray.intersectObject(collider)[0];
+  if (!hit || !hit.face) return null;
+  const n = hit.face.normal;
+  if (n.y < 0.75) return null;
+  if (hit.point.y > pos.y + 1.2 || hit.point.y < pos.y - 4.5) return null;   // ignore tabletops above and far below
+  return hit.point;
+}
+function showRing(p) { ring.position.set(p.x, p.y + 0.015, p.z); ring.visible = true; }
+
+let drag = null;
+canvas.addEventListener("pointerdown", (e) => {
+  if (mode === "overview") return;
+  if (e.target !== canvas) return;
+  canvas.focus();
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false };
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* synthetic or already-released pointer */ }
+});
+let hoverTick = 0;
+canvas.addEventListener("pointermove", (e) => {
+  if (mode === "overview") return;
+  if (drag && drag.id === e.pointerId) {
+    if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) { drag.moved = true; canvas.classList.add("dragging"); }
+    if (drag.moved) {
+      look(e.clientX - drag.x, e.clientY - drag.y, touch ? 0.0055 : 0.0038);
+      if (mode === "tour") pauseTour();
+    }
+    drag.x = e.clientX; drag.y = e.clientY;
+    return;
+  }
+  if (touch || mode !== "walk") return;
+  if ((hoverTick = (hoverTick + 1) % 2)) return;                      // raycast every other move event
+  const p = floorHit(e.clientX, e.clientY);
+  canvas.classList.toggle("floor", !!p);
+  if (p && !autoTarget) showRing(p); else if (!autoTarget) ring.visible = false;
+});
+function endDrag(e) {
+  if (!drag || drag.id !== e.pointerId) return;
+  const wasClick = !drag.moved && performance.now() - drag.t < 450;
+  drag = null;
+  canvas.classList.remove("dragging");
+  if (!wasClick) return;
+  const p = floorHit(e.clientX, e.clientY);
+  if (!p) return;
+  if (mode === "tour") setMode("walk");
+  autoTarget = p.clone();
+  autoStall = 0;
+  showRing(p);
+}
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", (e) => { if (drag && drag.id === e.pointerId) { drag = null; canvas.classList.remove("dragging"); } });
+canvas.addEventListener("pointerleave", () => { if (!autoTarget) ring.visible = false; });
+canvas.addEventListener("wheel", (e) => {
+  if (mode !== "walk" && mode !== "tour") return;
+  e.preventDefault();
+  camera.fov = THREE.MathUtils.clamp(camera.fov + Math.sign(e.deltaY) * 3, 40, 80);
+  camera.updateProjectionMatrix();
+}, { passive: false });
+function look(dx, dy, s) {
+  yaw += dx * s;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch + dy * s));
+}
+
+// virtual joystick (phones)
+const joy = $("joy"), knob = $("knob");
+let joyId = null;
+function joyMove(e) {
+  const r = joy.getBoundingClientRect();
+  let x = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+  let y = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+  const m = Math.hypot(x, y);
+  if (m > 1) { x /= m; y /= m; }
+  joyVec.x = x; joyVec.y = -y;
+  knob.style.transform = `translate(${x * 34}px, ${y * 34}px)`;
+}
+joy.addEventListener("pointerdown", (e) => { joyId = e.pointerId; try { joy.setPointerCapture(e.pointerId); } catch (_) {} joyMove(e); e.stopPropagation(); });
+joy.addEventListener("pointermove", (e) => { if (e.pointerId === joyId) joyMove(e); });
+const joyEnd = (e) => { if (e.pointerId !== joyId) return; joyId = null; joyVec.x = joyVec.y = 0; knob.style.transform = ""; };
+joy.addEventListener("pointerup", joyEnd);
+joy.addEventListener("pointercancel", joyEnd);
+
+// ------------------------------------------------------------ guided tour
+let tourIdx = 0, tourPlaying = true, tourTimer = null, tourStart = 0, drift = 0, driftBase = 0;
+const TOUR_MS = 8000;
+function showStop(i) {
+  tourIdx = (i + SPOTS.length) % SPOTS.length;
+  const s = SPOTS[tourIdx];
+  transition(() => {
+    place(s);
+    driftBase = yaw;
+    drift = 0;
+    if (mode !== "tour") setMode("tour");
+    $("tStep").textContent = `Stop ${tourIdx + 1} of ${SPOTS.length}`;
+    $("tName").textContent = s.n;
+    $("tText").textContent = s.t;
+    tourStart = performance.now();
+  });
+}
+function tourStep(d) {
+  if (tourIdx === SPOTS.length - 1 && d > 0) { stopTourTimer(); setMode("overview"); return; }
+  showStop(tourIdx + d);
+  restartTimer();
+}
+function restartTimer() {
+  stopTourTimer();
+  if (tourPlaying) tourTimer = setTimeout(() => tourStep(1), TOUR_MS);
+  $("tPlay").innerHTML = tourPlaying ? "&#10074;&#10074;" : "&#9654;";
+  $("tPlay").setAttribute("aria-label", tourPlaying ? "Pause tour" : "Play tour");
+}
+function stopTourTimer() { if (tourTimer) clearTimeout(tourTimer); tourTimer = null; }
+function pauseTour() { if (tourPlaying) { tourPlaying = false; restartTimer(); } }
+function startTour() { tourPlaying = true; showStop(0); restartTimer(); }
+$("tNext").addEventListener("click", () => tourStep(1));
+$("tPrev").addEventListener("click", () => tourStep(-1));
+$("tPlay").addEventListener("click", () => { tourPlaying = !tourPlaying; tourStart = performance.now(); restartTimer(); });
+$("tExit").addEventListener("click", () => setMode("walk"));
+
+$("mOverview").addEventListener("click", () => transition(() => setMode("overview")));
+$("mTour").addEventListener("click", startTour);
+$("mWalk").addEventListener("click", () => { if (mode === "tour") setMode("walk"); else goTo(SPOTS[0]); });
+$("startTour").addEventListener("click", startTour);
+$("startWalk").addEventListener("click", () => goTo(SPOTS[0]));
+if (touch) {
+  $("keys").textContent = "Tap any spot on the floor to walk there. Drag to look around. Use the joystick to stroll.";
+}
+
+function renderChips(active) {
+  const box = $("rooms");
+  if (!box.childElementCount) {
+    for (const s of SPOTS) {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.textContent = s.n;
+      b.addEventListener("click", () => goTo(s));
+      box.appendChild(b);
+    }
+  }
+  const cur = active || (mode === "walk" ? $("roomName").textContent : "");
+  for (const b of box.children) b.classList.toggle("on", mode === "walk" && b.textContent === cur);
+}
+
+// ------------------------------------------------------------ room label & minimap
+const toPlan = (v) => ({ x: v.x / F, fy: 35 + v.z / F, z: v.y / F });
+function roomAt(v) {
+  const p = toPlan(v);
+  const inside = (r) => p.x >= r[0] && p.x <= r[1] && p.fy >= r[2] && p.fy <= r[3];
+  if (p.z > 9.5 && inside(LOFT.r)) return "Loft";
+  for (const r of ROOMS) if (inside(r.r)) return r.n;
+  return "Outside";
+}
+let lastRoom = "";
+function updateRoomLabel() {
+  const r = roomAt(pos);
+  if (r !== lastRoom) { lastRoom = r; $("roomName").textContent = r; renderChips(r); }
+}
+
+const mini = $("mini"), mctx = mini.getContext("2d");
+const MX0 = -3, MX1 = 93, MY0 = -2, MY1 = 47;
+const ms = mini.width / (MX1 - MX0);
+const mx = (x) => (x - MX0) * ms, my = (fy) => (fy - MY0) * ms;
+function drawMap() {
+  const inside = mode !== "overview";
+  const loftView = inside && pos.y > 2.2;
+  $("mapLevel").textContent = loftView ? "Loft level" : "Main floor";
+  mctx.clearRect(0, 0, mini.width, mini.height);
+  const rect = (r, fill, stroke) => {
+    mctx.fillStyle = fill; mctx.fillRect(mx(r[0]), my(r[2]), (r[1] - r[0]) * ms, (r[3] - r[2]) * ms);
+    if (stroke) { mctx.strokeStyle = stroke; mctx.lineWidth = 2; mctx.strokeRect(mx(r[0]), my(r[2]), (r[1] - r[0]) * ms, (r[3] - r[2]) * ms); }
+  };
+  rect([0, 40, 35, 43], "rgba(181,101,43,0.35)");
+  for (const b of [[0, 40, 0, 35], [40, 51.6, 2.7, 18], [51.6, 89.6, 0, 35]]) rect(b, "rgba(255,255,255,0.10)", "rgba(255,255,255,0.55)");
+  const cur = roomAt(pos);
+  if (loftView) {
+    rect([0.75, 26.3, 0.75, 17.6], "rgba(255,255,255,0.18)");
+    rect([0.75, 21.4, 17.6, 34.25], "rgba(255,255,255,0.18)");
+  } else {
+    for (const r of ROOMS) {
+      if (r.n === "Front Porch") continue;
+      rect(r.r, inside && r.n === cur ? "rgba(208,20,26,0.45)" : "rgba(0,0,0,0)", "rgba(255,255,255,0.22)");
+    }
+  }
+  mctx.fillStyle = "rgba(255,255,255,0.75)";
+  mctx.font = "600 17px Barlow, sans-serif";
+  mctx.textAlign = "center";
+  for (const [t, x, fy] of [["HOUSE", 20, 19], ["STUDIO", 63, 19], ["GARAGE", 82, 19], ["PORCH", 20, 40.5]]) mctx.fillText(t, mx(x), my(fy));
+  const v = inside ? pos : camera.position;
+  const p = toPlan(v);
+  const a = inside ? yaw : Math.atan2(-(orbit.target.x - camera.position.x), -(orbit.target.z - camera.position.z));
+  mctx.save();
+  mctx.translate(mx(THREE.MathUtils.clamp(p.x, MX0, MX1)), my(THREE.MathUtils.clamp(p.fy, MY0, MY1)));
+  mctx.rotate(-a);
+  mctx.fillStyle = "rgba(208,20,26,0.35)";
+  mctx.beginPath(); mctx.moveTo(0, 0); mctx.arc(0, 0, 34, -Math.PI / 2 - 0.55, -Math.PI / 2 + 0.55); mctx.closePath(); mctx.fill();
+  mctx.fillStyle = "#ff3b40"; mctx.strokeStyle = "#fff"; mctx.lineWidth = 3;
+  mctx.beginPath(); mctx.arc(0, 0, 8, 0, Math.PI * 2); mctx.fill(); mctx.stroke();
+  mctx.restore();
+}
+mini.addEventListener("click", (e) => {
+  if (!collider) return;
+  const r = mini.getBoundingClientRect();
+  const x = MX0 + ((e.clientX - r.left) / r.width) * (MX1 - MX0);
+  const fy = MY0 + ((e.clientY - r.top) / r.height) * (MY1 - MY0);
+  const onLoft = mode !== "overview" && pos.y > 2.2;
+  goTo({ n: "", p: [x, fy], z: onLoft ? 10.333 : 0, yaw: mode !== "overview" ? yaw : 0 });
+});
+
+window.__walk = { get pos() { return pos; }, set yaw(v) { yaw = v; }, goTo, place, step: updateWalk, render: () => renderer.render(scene, camera), setTarget: (v) => { autoTarget = v; } };   // console hook for testing
+
+// ------------------------------------------------------------ loop
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+resize();
+
+const clock = new THREE.Clock();
+let mapTick = 0;
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (mode === "overview") orbit.update();
+  else {
+    if (mode === "tour" && tourPlaying && !drag && !reduceMotion) {
+      drift += dt;
+      yaw = driftBase + Math.sin(drift * 0.35) * 0.18;                 // slow look-around at each stop
+    }
+    updateWalk(dt);
+  }
+  if (mode === "tour") $("tBar").style.width = tourPlaying ? Math.min(100, (performance.now() - tourStart) / TOUR_MS * 100) + "%" : "0%";
+  renderer.render(scene, camera);
+  if ((mapTick = (mapTick + 1) % 3) === 0) drawMap();
+});
+</script>
+
+</body>
+</html>

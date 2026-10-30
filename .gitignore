@@ -1,0 +1,5 @@
+ph_assets/
+*.blend
+*.blend1
+blender/site/
+__pycache__/
