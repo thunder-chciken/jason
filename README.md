@@ -24,11 +24,11 @@ preset on **Other** and deploy. Every push to `main` redeploys.
 | File | What it is |
 | --- | --- |
 | `index.html` | The viewer (three.js 0.165, loaded from jsDelivr) |
-| `model/mehnert.json` | glTF scene with its meshopt-compressed geometry inlined |
-| `model/lm_*.jpg` | Lighting baked in Cycles (lightmaps), one per area |
-| `model/*.jpg, *.png` | Material and furniture textures |
-| `model/sky.jpg` | Sky background |
-| `model/bake.json` | Lightmap exposure and sky rotation the viewer reads |
+| `m/<build>/mehnert.json` | glTF scene with its meshopt-compressed geometry inlined |
+| `m/<build>/lm_*.jpg` | Lighting baked in Cycles (lightmaps), one per area |
+| `m/<build>/*.jpg, *.png` | Material and furniture textures |
+| `m/<build>/sky.jpg` | Sky background |
+| `m/<build>/bake.json` | Lightmap exposure and sky rotation the viewer reads |
 
 ## Rebuilding the model (`blender/`)
 
@@ -44,8 +44,9 @@ python blender/package.py
 `bake.py` builds the house from the plan dimensions in `model.py`, places the
 furniture from `furnish.py`, bakes the lightmaps and exports to
 `blender/site/model/`. `package.py` inlines the geometry so the model is one
-JSON file plus images. Copy `blender/site/model/` into `public/model/` to update
-the live site.
+JSON file plus images. Each deploy copies the model into a new `public/m/<build>/`
+folder named after a hash of its contents, so browsers always load the latest
+version while still caching each one permanently.
 
 All dimensions in `model.py` are in feet and come straight from the plans.
 Things the plans don't specify are placeholders: finishes, furniture and
